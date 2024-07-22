@@ -1,27 +1,66 @@
-package go_demo
+package main
 
 import (
-	"github.com/gin-gonic/gin"
-	"net/http"
+	"bluebell/controller"
+	//	"bluebell/controller"
+	"bluebell/dao/mysql"
+	"bluebell/dao/redis"
+	"bluebell/logger"
+	"bluebell/pkg/snowflake"
+	"bluebell/router"
+	"bluebell/setting"
+	"fmt"
+	_ "os"
 )
 
-func func1(ctx *gin.Context) {}
-func func4(ctx *gin.Context) {}
+// @title bluebell项目接口文档
+// @version 1.0
+// @description Go web开发进阶项目实战课程bluebell
 
+// @contact.name liwenzhou
+// @contact.url http://www.liwenzhou.com
+
+// @host 127.0.0.1:8084
+// @BasePath /api/v1
 func main() {
-	r := gin.Default()
-
-	r.GET("/", func(c *gin.Context) {
-		c.String(http.StatusOK, "ok")
-	})
-	shopGroup := r.Group("/shop")
-	shopGroup.Use(func1)
-	{
-		shopGroup.GET("/index", func4)
+	//if len(os.Args) < 2 {
+	//	fmt.Println("need config file.eg: bluebell config.yaml")
+	//	return
+	//}
+	// 加载配置
+	if err := setting.Init(); err != nil {
+		fmt.Printf("load config failed, err:%v\n", err)
+		return
 	}
+	if err := logger.Init(setting.Conf.LogConfig, setting.Conf.Mode); err != nil {
+		fmt.Printf("init logger failed, err:%v\n", err)
+		return
+	}
+	if err := mysql.Init(setting.Conf.MySQLConfig); err != nil {
+		fmt.Printf("init mysql failed, err:%v\n", err)
+		return
+	}
+	defer mysql.Close() // 程序退出关闭数据库连接
+	if err := redis.Init(setting.Conf.RedisConfig); err != nil {
+		fmt.Printf("init redis failed, err:%v\n", err)
+		return
+	}
+	defer redis.Close()
 
-	err := r.Run()
+	if err := snowflake.Init(setting.Conf.StartTime, setting.Conf.MachineID); err != nil {
+		fmt.Printf("init snowflake failed, err:%v\n", err)
+		return
+	}
+	// 初始化gin框架内置的校验器使用的翻译器
+	if err := controller.InitTrans("zh"); err != nil {
+		fmt.Printf("init validator trans failed, err:%v\n", err)
+		return
+	}
+	// 注册路由
+	r := router.SetupRouter(setting.Conf.Mode)
+	err := r.Run(fmt.Sprintf(":%d", setting.Conf.Port))
 	if err != nil {
+		fmt.Printf("run server failed, err:%v\n", err)
 		return
 	}
 }
